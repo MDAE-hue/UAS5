@@ -1,34 +1,75 @@
 <?php
-
 require_once __DIR__ . '/../config/database.php';
 require_once __DIR__ . '/../core/jwt.php';
-require_once __DIR__ . '/../core/response.php';
 
 class AuthController {
+
     public function login() {
-        global $pdo;
+        // Pastikan header JSON
+        header('Content-Type: application/json');
 
-        $input = json_decode(file_get_contents("php://input"), true);
-        $nik = $input['nik'] ?? '';
+        // Ambil input JSON dari request body
+        $data = json_decode(file_get_contents('php://input'), true);
+        $nik = $data['nik'] ?? null;
 
-        if (!$nik) jsonResponse(false, "NIK wajib diisi");
+        if (!$nik) {
+            echo json_encode([
+                "status" => false,
+                "message" => "NIK harus diisi"
+            ]);
+            exit; // hentikan eksekusi agar tidak ada output tambahan
+        }
 
-        $stmt = $pdo->prepare("SELECT * FROM users WHERE nik = :nik LIMIT 1");
-        $stmt->execute(['nik' => $nik]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
+        global $conn;
 
-        if (!$user) jsonResponse(false, "NIK tidak ditemukan");
+        try {
+            $stmt = $conn->prepare("SELECT * FROM users WHERE nik = ?");
+            $stmt->execute([$nik]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        $token = JWT::encode([
-            "id" => $user['id'],
-            "nik" => $user['nik'],
-            "role" => $user['role'],
-            "exp" => time() + (60 * 60 * 24) // 1 hari
-        ]);
+            if (!$user) {
+                echo json_encode([
+                    "status" => false,
+                    "message" => "NIK tidak ditemukan"
+                ]);
+                exit;
+            }
 
-        jsonResponse(true, "Login berhasil", [
-            "token" => $token,
-            "user" => $user
-        ]);
+            // Payload JWT
+            $payload = [
+                "iss" => "php-jwt",          // issuer
+                "sub" => $user['id'],        // subject
+                "nik" => $user['nik'],
+                "role_id" => $user['role_id'],
+                "iat" => time(),
+                "exp" => time() + (60*60*24) // 1 hari
+            ];
+
+            $token = JWT::encode($payload, "SECRET_KEY", 'HS256');
+
+            echo json_encode([
+                "status" => true,
+                "message" => "Login berhasil",
+                "data" => [
+                    "token" => $token,
+                    "user" => [
+                        "id" => $user['id'],
+                        "nik" => $user['nik'],
+                        "name" => $user['name'],
+                        "role_id" => $user['role_id'],
+                        "created_at" => $user['created_at'],
+                        "updated_at" => $user['updated_at']
+                    ]
+                ]
+            ]);
+            exit;
+
+        } catch (PDOException $e) {
+            echo json_encode([
+                "status" => false,
+                "message" => "Error server: " . $e->getMessage()
+            ]);
+            exit;
+        }
     }
 }

@@ -36,6 +36,7 @@ if ($uri !== '/' && str_ends_with($uri, '/')) {
 // file_put_contents(__DIR__ . '/../logs/debug.txt', "REQ: $method $uri\n", FILE_APPEND);
 
 // include routes
+require_once __DIR__ . '/../routes/user.php';
 require_once __DIR__ . '/../routes/auth.php';
 require_once __DIR__ . '/../routes/surat.php';
 
